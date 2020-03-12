@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>firework</title>
+</head>
+<body>
+    <div class="content">
+        <canvas id="canvas"></canvas>
+    </div>
+</body>
+<script type="text/javascript">
+    const bodyWidht = document.body.clientWidth;
+    const bodyHeight = document.body.clientHeight;
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    let fireworks = null; // 烟花实例
+    let particles = []; // 粒子数目
+
+    canvas.width = bodyWidht;
+    canvas.height = bodyHeight;
+
+    // Utils 工具函数
+    function colorObjRandom(a = 1) {
+        let r = ~~(Math.random() * 255);
+        let g = ~~(Math.random() * 255);
+        let b = ~~(Math.random() * 255);
+
+        return { r, g, b };
+    }
+
+    function numRandom(min, max, integer = true) {
+        return integer
+            ? ~~(Math.random() * (max - min + 1) + min)
+            : Math.random() * (max - min + 1) + min;
+    }
+
+    function getDistance(startX, startY, endX, endY) {
+        return Math.sqrt(Math.pow(startX - endX, 2) + Math.pow(startY - endY, 2));
+    }
+
+    /**
+    * 动画说明
+    * coordinates 是运动坐标集合，每一次新的赋值都会将数组最老的那项坐标去除
+    * 每帧画数组的第一项到最后一项 这样就能保持一个线条的长度 给人假象的尾巴错觉
+    * 通过初始点start的x，y值和随机的结束点end x，y的值来计算出夹角
+    * 这个夹角用于计算斜边速度s(speed)的正弦速度和余弦速度
+    *
+    * 关于夹角计算
+    * Math.atan2(y, x) 求取正切值，是一个弧度值 x邻边长 y对边长 如 Math.atan2(4, 0) / (Math.PI / 108) = 90
+    * Math.cos(a) 返回余弦值 a为弧度 非角度
+    * Math.sin(a) 返回正弦值 a为弧度 非角度
+    * Math.abs 求取绝对值
+    */
+    class Fireworks {
+        constructor(ctx) {
+            this.ctx = ctx;
+            this.w = bodyWidht; // 画布高度
+            this.h = bodyHeight; // 画布宽度
+            this.s = 15; // 初始速度
+            this.a = 0.25; // 加速度
+            this.x = 0; // 球当前位置x
+            this.y = 0; // 球当前位置y
+            this.sx = 0; // 初始位置x
+            this.sy = 0; // 初始位置y
+            this.ex = 0; // 终点位置x
+            this.ey = 0; // 终点位置y
+            this.coordinates = []; // 坐标数组
+            this.coordinatesCount = 5; // 坐标数组数
+            this.colorObj = "#FFFFFF"; // 球颜色
+            this.alpha = 0; // 球的透明度
+            this.angle = 0;
+            this.distanceToTarget = null; // 移动最大距离
+            this.init();
+        }
+
+        init() {
+            this.x = this.sx = this.w / 2;
+            this.y = this.sy = this.h;
+            this.ex = numRandom(this.w * 0.2, this.w * 0.8);
+            // this.ey = numRandom(this.h / 3, this.h * 0.6);
+            this.angle = Math.atan2(
+                Math.abs(this.ey - this.sy),
+                Math.abs(this.ex - this.sx)
+            );
+            this.distanceToTarget = getDistance(this.x, this.y, this.ex, this.ey);
+            this.colorObj = colorObjRandom();
+            this.alpha = Math.random() * 0.5 + 0.5;
+            this.coordinates.push([this.sx, this.sy]);
+        }
+
+        update() {
+            // 计算当前速度
+            // this.s *= this.a;
+            this.s -= this.a;
+
+            // 计算烟花此时速度在水平和垂直方向上的分量，其实就是从上一帧到这一帧之间烟花移动的水平和垂直方向上的距离
+            let vx = Math.cos(this.angle) * this.s,
+                vy = -1 * Math.sin(this.angle) * this.s;
+
+            // 判断当前烟花的飞行方向 左半区/右半区
+            if (this.ex < this.sx) {
+                vx *= -1;
+            }
+
+            // 计算烟花已经移动的距离，当距离超出最大距离时，产生爆炸
+            this.distanceTraveled = getDistance(
+                this.sx,
+                this.sy,
+                this.x + vx,
+                this.y + vy
+            );
+
+            // return;
+
+            if (this.distanceTraveled >= this.distanceToTarget || this.s <= 0) {
+                // 产生爆炸
+                this.boom();
+
+                return;
+            }
+
+            // 更新当前位置
+            this.x += vx;
+            this.y += vy;
+
+            if (this.coordinates.length >= this.coordinatesCount) {
+                // 从用于实现烟花尾巴的队列中移除最早的位置
+                this.coordinates.pop();
+                // 记录当前位置
+                this.coordinates.unshift([this.x, this.y]);
+            } else {
+                this.coordinates.push([this.x, this.y]);
+            }
+        }
+
+        draw() {
+            const { r, g, b } = this.colorObj;
+
+            ctx.beginPath();
+            // 移动到最早记录的那个位置
+            ctx.moveTo(
+                this.coordinates[this.coordinates.length - 1][0],
+                this.coordinates[this.coordinates.length - 1][1]
+            );
+            ctx.lineTo(this.x, this.y);
+            ctx.strokeStyle = `rgba(${r},${g},${b},1)`;
+            ctx.stroke();
+        }
+
+        boom() {
+            // 销毁当前烟花
+            fireworks = null;
+
+            let particleCount = numRandom(50, 100); // 随机生成爆炸后产生的粒子数量
+
+            while (particleCount--) {
+                particles.push(new Particle(this.ctx, this.x, this.y, this.colorObj));
+            }
+        }
+    }
+
+    class Particle {
+        constructor(ctx, x, y, colorObj) {
+            this.ctx = ctx;
+            this.x = x;
+            this.y = y;
+            this.colorObj = colorObj; // 承载rgb数据
+            this.coordinates = [{ x, y }];
+            this.coordinatesCount = 8; // 控制轨道留痕长度 即假视觉焰尾
+            this.angle = numRandom(0, Math.PI * 2, false); // 随机力夹角 用于计算x y 方向的速度
+            this.speed = numRandom(3, 5); // 主速度
+            this.friction = 0.98; // 空气阻力 控制主速度的衰减
+            this.gravity = 1.5; // 重力 控制下坠趋势 即控制y方向的速度
+            this.alpha = 1; // 每个粒子的初始透明度
+            this.decay = 0.025; // 粒子的消亡速度 即透明度趋向0
+        }
+
+        draw() {
+            const { r, g, b } = this.colorObj;
+
+            this.ctx.beginPath();
+            this.ctx.moveTo(
+                this.coordinates[this.coordinates.length - 1][0],
+                this.coordinates[this.coordinates.length - 1][1]
+            );
+            this.ctx.lineTo(this.x, this.y);
+            this.ctx.strokeStyle = `rgba(${r},${g},${b},${this.alpha})`;
+            this.ctx.alpha = this.alpha;
+            this.ctx.stroke();
+        }
+
+        update(index) {
+            // 计算粒子此时的速度
+            this.speed *= this.friction;
+
+            // 计算粒子移动后的水平和垂直方向的位置
+            this.x += Math.cos(this.angle) * this.speed;
+            this.y += Math.sin(this.angle) * this.speed + this.gravity;
+
+            // 计算粒子的颜色透明度
+            this.alpha -= this.decay;
+
+            // 判断粒子是否消亡
+            if (this.alpha < this.decay) {
+                // 从粒子集合中销毁粒子
+                particles.splice(index, 1);
+
+                return;
+            }
+
+            if (this.coordinates.length >= this.coordinatesCount) {
+                // 从用于实现烟花尾巴的队列中移除最早的位置
+                this.coordinates.pop();
+                // 记录当前位置
+                this.coordinates.unshift([this.x, this.y]);
+            } else {
+                this.coordinates.push([this.x, this.y]);
+            }
+        }
+    }
+
+    function start() {
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+        ctx.fillRect(0, 0, bodyWidht, bodyWidht);
+        ctx.globalCompositeOperation = "lighter";
+
+        // 更新烟花
+        if (fireworks) {
+            fireworks.draw();
+            fireworks.update();
+        } else {
+            let i = particles.length;
+
+            if (!i) {
+        fireworks = new Fireworks(ctx);
+        start();
+
+        return;
+        }
+
+        while (i--) {
+            particles[i].draw();
+            particles[i].update(i);
+        }
+    }
+
+        requestAnimationFrame(start);
+    };
+
+    requestAnimationFrame(start);
+</script>
+</html>
