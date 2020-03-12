@@ -51,7 +51,9 @@
     }
 
     function getDistance(startX, startY, endX, endY) {
-        return Math.sqrt(Math.pow(startX - endX, 2) + Math.pow(startY - endY, 2));
+        return Math.sqrt(
+            Math.pow(Math.abs(startX - endX), 2) + Math.pow(startY - endY, 2)
+        );
     }
 
     /**
@@ -73,7 +75,8 @@
             this.w = bodyWidht; // 画布高度
             this.h = bodyHeight; // 画布宽度
             this.s = 15; // 初始速度
-            this.a = 0.25; // 加速度
+            this.a = 1; // 加速度
+            this.g = 0.98; // 重力
             this.x = 0; // 球当前位置x
             this.y = 0; // 球当前位置y
             this.sx = 0; // 初始位置x
@@ -93,7 +96,7 @@
             this.x = this.sx = this.w / 2;
             this.y = this.sy = this.h;
             this.ex = numRandom(this.w * 0.2, this.w * 0.8);
-            // this.ey = numRandom(this.h / 3, this.h * 0.6);
+            this.ey =  numRandom(0, this.h * 0.6, false);
             this.angle = Math.atan2(
                 Math.abs(this.ey - this.sy),
                 Math.abs(this.ex - this.sx)
@@ -107,11 +110,11 @@
         update() {
             // 计算当前速度
             // this.s *= this.a;
-            this.s -= this.a;
+            this.s *= this.a;
 
             // 计算烟花此时速度在水平和垂直方向上的分量，其实就是从上一帧到这一帧之间烟花移动的水平和垂直方向上的距离
             let vx = Math.cos(this.angle) * this.s,
-                vy = -1 * Math.sin(this.angle) * this.s;
+                vy = -1 * Math.sin(this.angle) * this.s * this.g;
 
             // 判断当前烟花的飞行方向 左半区/右半区
             if (this.ex < this.sx) {
@@ -125,8 +128,6 @@
                 this.x + vx,
                 this.y + vy
             );
-
-            // return;
 
             if (this.distanceTraveled >= this.distanceToTarget || this.s <= 0) {
                 // 产生爆炸
